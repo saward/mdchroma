@@ -9,7 +9,9 @@ import (
 	"github.com/alecthomas/chroma/formatters/html"
 	"github.com/alecthomas/chroma/lexers"
 	"github.com/alecthomas/chroma/styles"
-	bf "github.com/russross/blackfriday/v2"
+	md "github.com/gomarkdown/markdown"
+	"github.com/gomarkdown/markdown/ast"
+	mdhtml "github.com/gomarkdown/markdown/html"
 )
 
 // Option defines the functional option type
@@ -56,7 +58,7 @@ func ChromaOptions(options ...html.Option) Option {
 }
 
 // Extend allows to specify the blackfriday renderer which is extended
-func Extend(br bf.Renderer) Option {
+func Extend(br md.Renderer) Option {
 	return func(r *Renderer) {
 		r.Base = br
 	}
@@ -65,8 +67,8 @@ func Extend(br bf.Renderer) Option {
 // NewRenderer will return a new bfchroma renderer with sane defaults
 func NewRenderer(options ...Option) *Renderer {
 	r := &Renderer{
-		Base: bf.NewHTMLRenderer(bf.HTMLRendererParameters{
-			Flags: bf.CommonHTMLFlags,
+		Base: mdhtml.NewRenderer(mdhtml.RendererOptions{
+			Flags: mdhtml.CommonFlags,
 		}),
 		Style:      styles.Monokai,
 		Autodetect: true,
@@ -79,7 +81,7 @@ func NewRenderer(options ...Option) *Renderer {
 }
 
 // RenderWithChroma will render the given text to the w io.Writer
-func (r *Renderer) RenderWithChroma(w io.Writer, text []byte, data bf.CodeBlockData) error {
+func (r *Renderer) RenderWithChroma(w io.Writer, text []byte, data ast.CodeBlock) error {
 	var lexer chroma.Lexer
 
 	// Determining the lexer to use
@@ -103,41 +105,40 @@ func (r *Renderer) RenderWithChroma(w io.Writer, text []byte, data bf.CodeBlockD
 // Renderer is a custom Blackfriday renderer that uses the capabilities of
 // chroma to highlight code with triple backtick notation
 type Renderer struct {
-	Base          bf.Renderer
+	Base          md.Renderer
 	Autodetect    bool
 	ChromaOptions []html.Option
 	Style         *chroma.Style
 	Formatter     *html.Formatter
-	embedCSS bool
+	embedCSS      bool
 }
 
 // RenderNode satisfies the Renderer interface
-func (r *Renderer) RenderNode(w io.Writer, node *bf.Node, entering bool) bf.WalkStatus {
-	switch node.Type {
-	case bf.Document:
+func (r *Renderer) RenderNode(w io.Writer, node ast.Node, entering bool) ast.WalkStatus {
+	if _, ok := node.(*ast.Document); ok {
 		if entering && r.embedCSS {
 			w.Write([]byte("<style>"))
 			r.Formatter.WriteCSS(w, r.Style)
 			w.Write([]byte("</style>"))
 		}
 		return r.Base.RenderNode(w, node, entering)
-	case bf.CodeBlock:
-		if err := r.RenderWithChroma(w, node.Literal, node.CodeBlockData); err != nil {
+	}
+	if nodeData, ok := node.(*ast.CodeBlock); ok {
+		if err := r.RenderWithChroma(w, nodeData.Literal, *nodeData); err != nil {
 			return r.Base.RenderNode(w, node, entering)
 		}
-		return bf.SkipChildren
-	default:
-		return r.Base.RenderNode(w, node, entering)
+		return ast.SkipChildren
 	}
+	return r.Base.RenderNode(w, node, entering)
 }
 
 // RenderHeader satisfies the Renderer interface
-func (r *Renderer) RenderHeader(w io.Writer, ast *bf.Node) {
+func (r *Renderer) RenderHeader(w io.Writer, ast ast.Node) {
 	r.Base.RenderHeader(w, ast)
 }
 
 // RenderFooter satisfies the Renderer interface
-func (r *Renderer) RenderFooter(w io.Writer, ast *bf.Node) {
+func (r *Renderer) RenderFooter(w io.Writer, ast ast.Node) {
 	r.Base.RenderFooter(w, ast)
 }
 
@@ -145,3 +146,4 @@ func (r *Renderer) RenderFooter(w io.Writer, ast *bf.Node) {
 func (r *Renderer) ChromaCSS(w io.Writer) error {
 	return r.Formatter.WriteCSS(w, r.Style)
 }
+
