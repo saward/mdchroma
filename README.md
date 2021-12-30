@@ -21,7 +21,7 @@ It will try to use the given language when available otherwise it will try to
 detect the language. If none of these two method works it will fallback to sane
 defaults.
 
-This is a fork of the [mdchroma](github.com/Depado/mdchroma) package,
+This is a fork of the [bfchroma](https://github.com/Depado/bfchroma) package,
 modified to instead work with
 [Go Markdown](https://github.com/gomarkdown/markdown).
 
